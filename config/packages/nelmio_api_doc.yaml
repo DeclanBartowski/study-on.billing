@@ -1,0 +1,17 @@
+nelmio_api_doc:
+  documentation:
+    info:
+      title: StudyOn.Billing API
+      description: Документация по апи
+      version: 1.0.0
+    components:
+      securitySchemes:
+        bearerAuth:
+          type: http
+          scheme: bearer
+          bearerFormat: JWT
+      security:
+        - bearerAuth: [ ]
+  areas: # Опционально, если нужно ограничить зоны документации
+    path_patterns:
+      - ^/api(?!/doc$)
