@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\DTO\RegistrationDTO;
 use App\Entity\User;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use JMS\Serializer\SerializerBuilder;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
@@ -15,6 +16,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -25,17 +27,20 @@ class AuthController extends AbstractController
     private UserPasswordHasherInterface $passwordHasher;
     private JWTTokenManagerInterface $jwtManager;
     private ValidatorInterface $validator;
+    private UserRepository $userRepository;
 
     public function __construct(
         EntityManagerInterface $entityManager,
         UserPasswordHasherInterface $passwordHasher,
         JWTTokenManagerInterface $jwtManager,
-        ValidatorInterface $validator
+        ValidatorInterface $validator,
+        UserRepository $userRepository,
     ) {
         $this->entityManager = $entityManager;
         $this->passwordHasher = $passwordHasher;
         $this->jwtManager = $jwtManager;
         $this->validator = $validator;
+        $this->userRepository = $userRepository;
     }
 
     #[OA\Post(
@@ -62,6 +67,10 @@ class AuthController extends AbstractController
                     properties: [
                         new OA\Property(property: "token", type: "string",
                             example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."),
+                        new OA\Property(property: "user", properties: [
+                            new OA\Property(property: "roles", type: "array", items: new OA\Items(type: "string",
+                                example: "ROLE_USER"))
+                        ]),
                     ],
                     type: "object"
                 )
@@ -71,7 +80,8 @@ class AuthController extends AbstractController
                 description: "Ошибка при авторизации",
                 content: new OA\JsonContent(
                     properties: [
-                        new OA\Property(property: "errors", type: "string", example: 'The key "username" must be provided.'),
+                        new OA\Property(property: "errors", type: "string",
+                            example: 'The key "username" must be provided.'),
                         new OA\Property(property: "code", type: "integer", example: 400),
                     ],
                     type: "object"
@@ -81,8 +91,33 @@ class AuthController extends AbstractController
 
     )]
     #[Route('/api/v1/auth', name: 'api_auth', methods: ['POST'])]
-    public function auth()
+    public function auth(Request $request)
     {
+        $data = json_decode($request->getContent(), true);
+
+        if (!isset($data['username'], $data['password'])) {
+            throw new AuthenticationException('Email and password are required');
+        }
+
+        $email = $data['username'];
+        $password = $data['password'];
+
+        $user = $this->userRepository->findOneBy(['email' => $email]);
+
+        if (!$user) {
+            throw new AuthenticationException('User not found');
+        }
+
+        if (!$this->passwordHasher->isPasswordValid($user, $password)) {
+            throw new AuthenticationException('Invalid credentials');
+        }
+
+        return new JsonResponse([
+            'token' => $this->jwtManager->create($user),
+            'user' => [
+                'roles' => $user->getRoles(),
+            ],
+        ]);
     }
 
     #[OA\Post(
@@ -120,7 +155,8 @@ class AuthController extends AbstractController
                 description: "Ошибка при регистрации",
                 content: new OA\JsonContent(
                     properties: [
-                        new OA\Property(property: "errors", type: "array", items: new OA\Items(type: "string", example: "Email is required.")),
+                        new OA\Property(property: "errors", type: "array", items: new OA\Items(type: "string",
+                            example: "Email is required.")),
                     ],
                     type: "object"
                 )
