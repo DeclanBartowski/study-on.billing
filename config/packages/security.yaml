@@ -10,6 +10,10 @@ security:
                 class: App\Entity\User
                 property: email
     firewalls:
+        api_token_refresh:
+            pattern: ^/api/v1/token/refresh
+            stateless: true
+            refresh_jwt: ~
         api_doc:
             pattern: ^/api/v1/doc
             security: false
@@ -20,8 +24,11 @@ security:
                 check_path: /api/v1/auth
         api:
             pattern: ^/api/v1
+            entry_point: jwt
             stateless: true
             jwt: ~
+            refresh_jwt:
+                check_path: /api/v1/token/refresh
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
@@ -42,6 +49,8 @@ security:
         # - { path: ^/profile, roles: ROLE_USER }
         - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/courses, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1, roles: IS_AUTHENTICATED_FULLY }
 when@test:
     security:

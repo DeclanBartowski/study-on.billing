@@ -7,3 +7,5 @@ app.redocly:
     path: /api/v1/doc
     methods: GET
     defaults: { _controller: nelmio_api_doc.controller.swagger_ui }
+api_refresh_token:
+    path: /api/v1/token/refresh

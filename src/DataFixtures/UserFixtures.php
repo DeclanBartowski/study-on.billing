@@ -2,19 +2,19 @@
 
 namespace App\DataFixtures;
 
+use App\Entity\User;
+use App\Service\PaymentService;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use App\Entity\User;
 
 class UserFixtures extends Fixture
 {
 
-    private UserPasswordHasherInterface $passwordHasher;
-
-    public function __construct(UserPasswordHasherInterface $passwordHasher)
-    {
-        $this->passwordHasher = $passwordHasher;
+    public function __construct(
+        private UserPasswordHasherInterface $passwordHasher,
+        private PaymentService $paymentService
+    ) {
     }
 
     public function load(ObjectManager $manager): void
@@ -31,17 +31,19 @@ class UserFixtures extends Fixture
                 'password' => '2486200',
             ],
         ];
+        $manager->wrapInTransaction(function () use ($users, $manager) {
+            foreach ($users as $user) {
+                $userEntity = new User();
+                $userEntity->setEmail($user['email']);
+                $userEntity->setRoles($user['roles']);
 
-        foreach ($users as $user) {
-            $userEntity = new User();
-            $userEntity->setEmail($user['email']);
-            $userEntity->setRoles($user['roles']);
+                $hashedPassword = $this->passwordHasher->hashPassword($userEntity, $user['password']);
+                $userEntity->setPassword($hashedPassword);
 
-            $hashedPassword = $this->passwordHasher->hashPassword($userEntity, $user['password']);
-            $userEntity->setPassword($hashedPassword);
-
-            $manager->persist($userEntity);
+                $manager->persist($userEntity);
+                $this->paymentService->deposit($userEntity, $this->paymentService->getInitialBalance());
+            }
             $manager->flush();
-        }
+        });
     }
 }

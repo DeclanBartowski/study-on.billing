@@ -5,7 +5,9 @@ namespace App\Controller;
 use App\DTO\RegistrationDTO;
 use App\Entity\User;
 use App\Repository\UserRepository;
+use App\Service\PaymentService;
 use Doctrine\ORM\EntityManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use JMS\Serializer\SerializerBuilder;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Nelmio\ApiDocBundle\Attribute\Security;
@@ -19,6 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 
 class AuthController extends AbstractController
 {
@@ -67,6 +70,10 @@ class AuthController extends AbstractController
                     properties: [
                         new OA\Property(property: "token", type: "string",
                             example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."),
+                        new OA\Property(property: "refresh_token", type: "string",
+                            example: "fasdfasdf97asd65f6a7s4dfa7s8d6f4a87d..."),
+                        new OA\Property(property: "refresh_token_expires", type: "number",
+                            example: "1745481039"),
                         new OA\Property(property: "user", properties: [
                             new OA\Property(property: "roles", type: "array", items: new OA\Items(type: "string",
                                 example: "ROLE_USER"))
@@ -91,7 +98,8 @@ class AuthController extends AbstractController
 
     )]
     #[Route('/api/v1/auth', name: 'api_auth', methods: ['POST'])]
-    public function auth(Request $request)
+    public function auth(Request $request, RefreshTokenGeneratorInterface $refreshTokenGenerator,
+        RefreshTokenManagerInterface $refreshTokenManager)
     {
         $data = json_decode($request->getContent(), true);
 
@@ -112,8 +120,13 @@ class AuthController extends AbstractController
             throw new AuthenticationException('Invalid credentials');
         }
 
+        $refreshToken = $refreshTokenGenerator->createForUserWithTtl($user, 2592000);
+        $refreshTokenManager->save($refreshToken);
+        
         return new JsonResponse([
             'token' => $this->jwtManager->create($user),
+            'refresh_token' => $refreshToken->getRefreshToken(),
+            'refresh_token_expires' => $refreshToken->getValid()->getTimestamp(),
             'user' => [
                 'roles' => $user->getRoles(),
             ],
@@ -144,6 +157,10 @@ class AuthController extends AbstractController
                     properties: [
                         new OA\Property(property: "token", type: "string",
                             example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."),
+                        new OA\Property(property: "refresh_token", type: "string",
+                            example: "fasdfasdf97asd65f6a7s4dfa7s8d6f4a87d..."),
+                        new OA\Property(property: "refresh_token_expires", type: "number",
+                            example: "1745481039"),
                         new OA\Property(property: "roles", type: "array", items: new OA\Items(type: "string",
                             example: "ROLE_USER")),
                     ],
@@ -162,10 +179,10 @@ class AuthController extends AbstractController
                 )
             ),
         ],
-
     )]
     #[Route('/api/v1/register', name: 'api_register', methods: ['POST'])]
-    public function register(Request $request): JsonResponse
+    public function register(Request $request, RefreshTokenGeneratorInterface $refreshTokenGenerator,
+        RefreshTokenManagerInterface $refreshTokenManager, PaymentService $paymentService): JsonResponse
     {
         try {
             $serializer = SerializerBuilder::create()->build();
@@ -189,13 +206,20 @@ class AuthController extends AbstractController
             $user->setPassword($this->passwordHasher->hashPassword($user, $registrationDTO->password));
             $user->setRoles(['ROLE_USER']);
 
-            $this->entityManager->persist($user);
-            $this->entityManager->flush();
+            $this->entityManager->wrapInTransaction(function () use ($user, $paymentService) {
+                $this->entityManager->persist($user);
+                $this->entityManager->flush();
+                $paymentService->deposit($user, $paymentService->getInitialBalance());
+            });
 
             $token = $this->jwtManager->create($user);
+            $refreshToken = $refreshTokenGenerator->createForUserWithTtl($user, 2592000);
+            $refreshTokenManager->save($refreshToken);
 
             return new JsonResponse([
                 'token' => $token,
+                'refresh_token' => $refreshToken->getRefreshToken(),
+                'refresh_token_expires' => $refreshToken->getValid()->getTimestamp(),
                 'roles' => $user->getRoles(),
             ], Response::HTTP_CREATED);
         } catch (\Exception $exception) {
