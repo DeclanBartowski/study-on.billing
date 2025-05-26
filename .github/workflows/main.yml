@@ -1,0 +1,68 @@
+name: CI
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: pguser
+          POSTGRES_PASSWORD: pguser
+          POSTGRES_DB: study_on_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_pgsql, zip
+          coverage: pcov
+          tools: composer
+
+      - name: Install dependencies
+        run: |
+          composer install --prefer-dist --no-progress --no-suggest
+
+      - name: Configure environment
+        run: |
+          cp .env .env.local
+          sed -i 's/DATABASE_URL=.*/DATABASE_URL="pgsql:\/\/pguser:pguser@postgres:5432\/study_on"/' .env.local
+          echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.local
+          echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.local
+          echo "JWT_PASSPHRASE=1234" >> .env.local
+
+      - name: Set up test environment
+        run: |
+          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_test" > .env.test
+          echo "APP_ENV=test" >> .env.test
+
+      - name: Generate JWT keys
+        run: php bin/console lexik:jwt:generate-keypair --skip-if-exists
+
+      - name: Initialize test database
+        run: |
+          php bin/console doctrine:database:create --env=test
+          php bin/console doctrine:migrations:migrate -n --env=test
+          php bin/console doctrine:fixtures:load -n --env=test
+
+      - name: Run tests
+        run: php bin/phpunit
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
