@@ -3,63 +3,56 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: pguser
-          POSTGRES_PASSWORD: pguser
-          POSTGRES_DB: study_on_billing
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+    #   ubuntu-latest должна работать стабильно, можно указать явно другую версию
+    #   steps можно сильнее разбить на категории и поправить
+    #   steps можно сильнее разбить на категории и поправить
+    #   тут представлен пример только для запуска тестов. Можно еще проверять код-стайл и mailer
+    #   часто встречается на рабочих проектах
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_pgsql, zip
+          php-version: '8.4.5'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
           coverage: pcov
           tools: composer
-
-      - name: Configure environment
+      - name: Setting environment and composer
+        #        тут тоже что-то можно изменить :)
         run: |
-          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" > .env.test
-          echo "APP_ENV=test" >> .env.test
-          echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.test
-          echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.test
-          echo "JWT_PASSPHRASE=study" >> .env.test
-
-      - name: Generate JWT keys
+          git config --global --add safe.directory /app
+          cat << EOF > .env.local
+          DATABASE_URL="pgsql://pguser:pguser@postgres:5432/study_on_billing"
+          JWT_SECRET_KEY="%kernel.project_dir%/config/jwt/private.pem"
+          JWT_PUBLIC_KEY="%kernel.project_dir%/config/jwt/public.pem"
+          JWT_PASSPHRASE="study"
+          EOF
+          cat .env.local
+          composer install
+      - name: Setting Docker
         run: |
-          mkdir -p config/jwt
-          openssl genrsa -out config/jwt/private.pem 2048
-          openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
-
-      - name: Wait for PostgreSQL
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+          docker-compose build
+          docker-compose up -d
+          docker ps -a
+      - name: Setting JWT
         run: |
-          for i in {1..10}; do
-            pg_isready -h postgres -U pguser -d postgres && break
-            sleep 2
-            [ $i -eq 10 ] && exit 1
-          done
-
-      - name: Initialize database
+          php bin/console lexik:jwt:generate-keypair
+      - name: Setting test environment and DB
+        #        проверяйте название контейнера и БД
         run: |
-          php bin/console doctrine:database:create --if-not-exists --env=test
-          php bin/console doctrine:migrations:migrate -n --env=test || php bin/console doctrine:schema:update --force --env=test
-          php bin/console doctrine:fixtures:load -n --env=test
-
-      - name: Run tests
-        run: php bin/phpunit
+          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" >> .env.test.local
+          ls -la
+          docker ps -a
+          docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
+          docker-compose exec -T php bin/console doctrine:database:create --env=test
+          docker-compose exec -T php bin/console doctrine:migrations:migrate -n --env=test
+          docker-compose exec -T php bin/console doctrine:fixtures:load -n --env=test
+          docker-compose exec -T php bin/phpunit
+      - name: run PHPUnit
+        run: docker-compose exec -T php bin/phpunit
