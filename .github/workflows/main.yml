@@ -47,7 +47,7 @@ jobs:
       - name: Configure environment
         run: |
           cp .env .env.local
-          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_test" >> .env.local
+          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" >> .env.local
           echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.local
           echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.local
           echo "JWT_PASSPHRASE=1234" >> .env.local
@@ -58,11 +58,19 @@ jobs:
           openssl genrsa -out config/jwt/private.pem 2048
           openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
 
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres -U $POSTGRES_USER -c "SELECT 1"; do
+            echo "Waiting for PostgreSQL..."
+            sleep 5
+          done
+
       - name: Initialize test database
         run: |
-          php bin/console doctrine:database:create --env=test
-          php bin/console doctrine:migrations:migrate -n --env=test
-          php bin/console doctrine:fixtures:load -n --env=test
+          php bin/console doctrine:database:create --env=test --if-not-exists
+          php bin/console doctrine:schema:update --force --env=test
+          php bin/console doctrine:migrations:migrate -n --env=test --no-interaction --verbose
+          php bin/console doctrine:fixtures:load -n --env=test --no-interaction --verbose
 
       - name: Run tests
         run: php bin/phpunit
