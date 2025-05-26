@@ -3,7 +3,8 @@
 namespace App\Tests;
 
 use App\DataFixtures\UserFixtures;
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use App\Service\PaymentService;
 
 class ApiAuthTest extends AbstractTest
 {
@@ -76,6 +77,10 @@ class ApiAuthTest extends AbstractTest
      */
     protected function getFixtures(): array
     {
-        return [new UserFixtures(self::$passwordHasher)];
+        $container = self::getContainer();
+        return [new UserFixtures(
+            $container->get(UserPasswordHasherInterface::class),
+            $container->get(PaymentService::class)
+        )];
     }
 }

@@ -7,12 +7,16 @@ use App\Entity\User;
 use App\Exception\NotEnoughFundsException;
 use App\Repository\CourseRepository;
 use App\Service\PaymentService;
+use Doctrine\ORM\EntityManagerInterface;
+use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use OpenApi\Attributes as OA;
+use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 
 #[Route('/api/v1/courses')]
 class CourseController extends AbstractController
@@ -92,7 +96,7 @@ class CourseController extends AbstractController
             )
         ]
     )]
-    #[Route('/{code}', name: 'api_v1_course_show')]
+    #[Route('/{code}', name: 'api_v1_course_show', methods: ['GET'])]
     public function course(Course $course): Response
     {
         $responseData = [
@@ -174,6 +178,82 @@ class CourseController extends AbstractController
                 'code' => Response::HTTP_NOT_ACCEPTABLE,
                 'message' => $e->getMessage()
             ], Response::HTTP_NOT_ACCEPTABLE);
+        }
+    }
+
+    #[Route('/{code}/edit', name: 'app_course_edit', methods: ['POST'])]
+    #[IsGranted('ROLE_SUPER_ADMIN')]
+    public function edit(Request $request, #[MapEntity(mapping: ['code' => 'code'])] Course $course, EntityManagerInterface $entityManager)
+    {
+        try {
+            $data = json_decode($request->getContent(), true);
+
+            if (isset($data['name'])) {
+                $course->setTitle($data['name']);
+            }
+            if (isset($data['price'])) {
+                $course->setPrice($data['price']);
+            }
+            if (isset($data['type'])) {
+                $course->setType($data['type']);
+            }
+
+            $entityManager->persist($course);
+            $entityManager->flush();
+
+            return new JsonResponse([
+                'success' => true,
+                'message' => 'Курс обновлён',
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], JsonResponse::HTTP_BAD_REQUEST);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Произошла ошибка при обновлении курса',
+            ], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/new', name: 'app_course_new', methods: ['POST'])]
+    #[IsGranted('ROLE_SUPER_ADMIN')]
+    public function new(Request $request, EntityManagerInterface $entityManager)
+    {
+        try {
+            $data = json_decode($request->getContent(), true);
+            $course = new Course();
+            if (isset($data['name'])) {
+                $course->setTitle($data['name']);
+            }
+            if (isset($data['code'])) {
+                $course->setCode($data['code']);
+            }
+            if (isset($data['price'])) {
+                $course->setPrice($data['price']);
+            }
+            if (isset($data['type'])) {
+                $course->setType($data['type']);
+            }
+            $entityManager->persist($course);
+            $entityManager->flush();
+
+            return new JsonResponse([
+                'success' => true,
+                'message' => 'Курс создан',
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], JsonResponse::HTTP_BAD_REQUEST);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Произошла ошибка при создании курса',
+            ], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

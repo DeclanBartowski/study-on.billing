@@ -5,6 +5,7 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     initial_balance: 10000.00
+    app.report_email: '%env(REPORT_EMAIL)%'
 
 services:
     # default configuration for services in *this* file
@@ -30,3 +31,8 @@ services:
     App\Service\PaymentService:
         arguments:
             $initialBalance: '%initial_balance%'
+
+    App\Command\PaymentReportCommand:
+        arguments:
+            $reportEmail: '%app.report_email%'
+        tags: [ 'console.command' ]

@@ -24,6 +24,9 @@ class Course
     #[ORM\Column(type: 'string', length: 255, unique: true)]
     private string $code;
 
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $title = null;
+
     #[ORM\Column(type: 'smallint')]
     private int $type;
 
@@ -101,5 +104,21 @@ class Course
             }
         }
         return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getTitle(): string
+    {
+        return $this->title;
+    }
+
+    /**
+     * @param string $title
+     */
+    public function setTitle(string $title): void
+    {
+        $this->title = $title;
     }
 }

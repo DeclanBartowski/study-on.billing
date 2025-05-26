@@ -62,4 +62,40 @@ class TransactionRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getResult();
     }
+
+    public function findRentalTransactionsEndingSoonForUser(User $user): array
+    {
+        $now = new \DateTime();
+        $tomorrow = (new \DateTime())->modify('+1 day');
+
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.user = :user')
+            ->andWhere('t.type = :type')
+            ->andWhere('t.expiresAt BETWEEN :now AND :tomorrow')
+            ->andWhere('t.course IS NOT NULL')
+            ->setParameter('user', $user)
+            ->setParameter('type', Transaction::OPERATION_TYPE_PAYMENT)
+            ->setParameter('now', $now)
+            ->setParameter('tomorrow', $tomorrow)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function findPaymentTransactionsForPeriod(
+        \DateTimeInterface $startDate,
+        \DateTimeInterface $endDate,
+        int $operationType
+    ): array {
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.createdAt BETWEEN :start AND :end')
+            ->andWhere('t.type = :type')
+            ->andWhere('t.course IS NOT NULL')
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->setParameter('type', $operationType)
+            ->join('t.course', 'c')
+            ->addSelect('c')
+            ->getQuery()
+            ->getResult();
+    }
 }

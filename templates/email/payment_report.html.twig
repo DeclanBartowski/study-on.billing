@@ -1,0 +1,28 @@
+{% extends 'email/report_template.html.twig' %}
+
+{% block title %}
+    Отчет об оплаченных курсах за период {{ startDate|date('d.m.Y') }} - {{ endDate|date('d.m.Y') }}
+{% endblock %}
+
+{% block body %}
+    <table>
+        <thead>
+        <tr>
+            <th>Название курса</th>
+            <th>Тип курса</th>
+            <th>Количество</th>
+            <th>Сумма</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in reportData %}
+            <tr>
+                <td>{{ item.code }}</td>
+                <td>{{ item.type }}</td>
+                <td>{{ item.count }}</td>
+                <td>{{ item.amount|format_currency('RUB') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

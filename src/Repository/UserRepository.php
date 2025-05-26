@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Transaction;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -31,5 +32,20 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         $user->setPassword($newHashedPassword);
         $this->getEntityManager()->persist($user);
         $this->getEntityManager()->flush();
+    }
+
+    public function findUsersWithRentalsEndingSoon(): array
+    {
+        return $this->createQueryBuilder('u')
+            ->join('u.transactions', 't')
+            ->andWhere('t.type = :type')
+            ->andWhere('t.expiresAt BETWEEN :now AND :tomorrow')
+            ->andWhere('t.course IS NOT NULL')
+            ->setParameter('type', Transaction::OPERATION_TYPE_PAYMENT)
+            ->setParameter('now', new \DateTime())
+            ->setParameter('tomorrow', (new \DateTime())->modify('+1 day'))
+            ->groupBy('u.id')
+            ->getQuery()
+            ->getResult();
     }
 }

@@ -24,8 +24,6 @@ abstract class AbstractTest extends WebTestCase
     protected function setUp(): void
     {
         self::getClient();
-
-        self::$passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
         $this->loadFixtures($this->getFixtures());
     }
 
