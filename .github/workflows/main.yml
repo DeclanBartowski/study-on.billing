@@ -58,13 +58,6 @@ jobs:
           openssl genrsa -out config/jwt/private.pem 2048
           openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
 
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          until PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres -U $POSTGRES_USER -c "SELECT 1"; do
-            echo "Waiting for PostgreSQL..."
-            sleep 5
-          done
-
       - name: Initialize test database
         run: |
           php bin/console doctrine:database:create --env=test --if-not-exists
