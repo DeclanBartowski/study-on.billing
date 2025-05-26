@@ -27,15 +27,7 @@ jobs:
           cat .env.local
           composer install
       - name: Setting Docker
-        run: |
-          sudo apt update && sudo apt install -y curl
-          curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose- $(uname -s)-$(uname -m)" -o docker-compose
-          chmod +x docker-compose
-          sudo mv docker-compose /usr/local/bin/
-          docker-compose --version
-          docker-compose build
-          docker-compose up -d
-          docker ps -a
+        uses: docker/setup-buildx-action@v2
       - name: Setting JWT
         run: |
           php bin/console lexik:jwt:generate-keypair
