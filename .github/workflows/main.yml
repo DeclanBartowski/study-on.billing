@@ -2,44 +2,70 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: pguser
+          POSTGRES_PASSWORD: pguser
+          POSTGRES_DB: study_on_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4.5'
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_pgsql, zip
           coverage: pcov
           tools: composer
-      - name: Setting environment and composer
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Configure environment
         run: |
-          git config --global --add safe.directory /app
-          cat << EOF > .env.local
-          DATABASE_URL="pgsql://pguser:pguser@study-onbilling-postgres-1:5432/study_on"
-          JWT_SECRET_KEY="%kernel.project_dir%/config/jwt/private.pem"
-          JWT_PUBLIC_KEY="%kernel.project_dir%/config/jwt/public.pem"
-          JWT_PASSPHRASE="1234"
-          EOF
-          cat .env.local
-          composer install
-      - name: Setting Docker
-        uses: docker/setup-buildx-action@v2
-      - name: Setting JWT
+          cp .env .env.local
+          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_test" >> .env.local
+          echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.local
+          echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.local
+          echo "JWT_PASSPHRASE=1234" >> .env.local
+
+      - name: Generate JWT keys
         run: |
-          php bin/console lexik:jwt:generate-keypair
-      - name: Setting test environment and DB
+          mkdir -p config/jwt
+          openssl genrsa -out config/jwt/private.pem 2048
+          openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
+
+      - name: Initialize test database
         run: |
-          echo "DATABASE_URL=pgsql://pguser:pguser@study-onbilling-postgres-1:5432/study_on" >> .env.test.local
-          ls -la
-          docker ps -a
-          docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
-          docker-compose exec -T php bin/console doctrine:database:create --env=test
-          docker-compose exec -T php bin/console doctrine:migrations:migrate -n --env=test
-          docker-compose exec -T php bin/console doctrine:fixtures:load -n --env=test
-          docker-compose exec -T php bin/phpunit
-      - name: run PHPUnit
-        run: docker-compose exec -T php bin/phpunit
+          php bin/console doctrine:database:create --env=test
+          php bin/console doctrine:migrations:migrate -n --env=test
+          php bin/console doctrine:fixtures:load -n --env=test
+
+      - name: Run tests
+        run: php bin/phpunit
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
