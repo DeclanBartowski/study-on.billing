@@ -57,8 +57,16 @@ jobs:
 
       - name: Initialize test database
         run: |
-          php bin/console doctrine:database:create --env=test
-          php bin/console doctrine:migrations:migrate -n --env=test
+          # Ждём доступности PostgreSQL
+          for i in {1..10}; do
+            pg_isready -h postgres -U pguser -d postgres && break
+            sleep 2
+            [ $i -eq 10 ] && exit 1
+          done
+          
+          # Создаём и наполняем БД
+          php bin/console doctrine:database:create --if-not-exists --env=test
+          php bin/console doctrine:migrations:migrate -n --env=test || php bin/console doctrine:schema:update --complete --force --env=test
           php bin/console doctrine:fixtures:load -n --env=test
 
       - name: Run tests
