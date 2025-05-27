@@ -50,5 +50,6 @@ jobs:
           ls -la
           docker ps -a
           docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
+          docker-compose exec -T php bin/console doctrine:database:create --env=test
       - name: run PHPUnit
         run: docker-compose exec -T php bin/phpunit
