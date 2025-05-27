@@ -49,5 +49,6 @@ jobs:
           echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" >> .env.test.local
           ls -la
           docker ps -a
+          docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
       - name: run PHPUnit
         run: docker-compose exec -T php bin/phpunit
