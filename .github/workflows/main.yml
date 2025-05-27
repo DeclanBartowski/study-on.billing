@@ -31,6 +31,13 @@ jobs:
           JWT_PASSPHRASE=study
           EOF
           cat .env.local
+          cat << EOF > .env.test.local
+          DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing
+          JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem
+          JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem
+          JWT_PASSPHRASE=study
+          EOF
+          cat .env.test.local
           composer install
       - name: Setting Docker
         run: |
