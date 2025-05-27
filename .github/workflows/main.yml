@@ -43,6 +43,7 @@ jobs:
       - name: Setting JWT
         run: |
           php bin/console lexik:jwt:generate-keypair
+          php bin/console lexik:jwt:check-config
       - name: Fix console permissions
         run: |
           # Меняем владельца и права через root в контейнере
