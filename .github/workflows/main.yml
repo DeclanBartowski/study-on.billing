@@ -25,10 +25,10 @@ jobs:
         run: |
           git config --global --add safe.directory /app
           cat << EOF > .env.local
-          DATABASE_URL="pgsql://pguser:pguser@postgres:5432/study_on_billing"
-          JWT_SECRET_KEY="%kernel.project_dir%/config/jwt/private.pem"
-          JWT_PUBLIC_KEY="%kernel.project_dir%/config/jwt/public.pem"
-          JWT_PASSPHRASE="study"
+          DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing
+          JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem
+          JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem
+          JWT_PASSPHRASE=study
           EOF
           cat .env.local
           composer install
@@ -40,6 +40,9 @@ jobs:
           docker-compose build
           docker-compose up -d
           docker ps -a
+      - name: Setting JWT
+        run: |
+          php bin/console lexik:jwt:generate-keypair
       - name: Fix console permissions
         run: |
           # Меняем владельца и права через root в контейнере
@@ -53,9 +56,6 @@ jobs:
 
           # Проверяем права
           docker-compose exec -T php ls -la /app/bin/phpunit
-      - name: Setting JWT
-        run: |
-          docker-compose exec -T --user www-data php bin/console lexik:jwt:generate-keypair
       - name: Setting test environment and DB
         #        проверяйте название контейнера и БД
         run: |
