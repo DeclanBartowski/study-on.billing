@@ -43,6 +43,12 @@ jobs:
       - name: Setting JWT
         run: |
           php bin/console lexik:jwt:generate-keypair
+      - name: Fix console permissions
+        run: |
+          # Меняем владельца и права через root в контейнере
+          docker-compose exec -T --user root php bash -c "chown www-data:www-data /app/bin/console && chmod 755 /app/bin/console"
+          # Проверяем
+          docker-compose exec -T php ls -la /app/bin/console
       - name: Setting test environment and DB
         #        проверяйте название контейнера и БД
         run: |
