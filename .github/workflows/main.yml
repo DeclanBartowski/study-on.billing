@@ -3,52 +3,56 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    #   ubuntu-latest должна работать стабильно, можно указать явно другую версию
+    #   steps можно сильнее разбить на категории и поправить
+    #   steps можно сильнее разбить на категории и поправить
+    #   тут представлен пример только для запуска тестов. Можно еще проверять код-стайл и mailer
+    #   часто встречается на рабочих проектах
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'  # Рекомендую использовать стабильную версию
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_pgsql, zip
+          php-version: '8.4.5'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
           coverage: pcov
           tools: composer
-
-      - name: Setup Docker
+      - name: Setting environment and composer
+        #        тут тоже что-то можно изменить :)
+        run: |
+          git config --global --add safe.directory /app
+          cat << EOF > .env.local
+          DATABASE_URL="pgsql://pguser:pguser@postgres:5432/study_on_billing"
+          JWT_SECRET_KEY="%kernel.project_dir%/config/jwt/private.pem"
+          JWT_PUBLIC_KEY="%kernel.project_dir%/config/jwt/public.pem"
+          JWT_PASSPHRASE="study"
+          EOF
+          cat .env.local
+          composer install
+      - name: Setting Docker
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
-
-      - name: Prepare environment
-        run: |
-          mkdir -p config/jwt
-          openssl genrsa -out config/jwt/private.pem 2048
-          openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
-          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" > .env.test
-          echo "APP_ENV=test" >> .env.test
-
-      - name: Build and start containers
-        run: |
           docker-compose build
           docker-compose up -d
-          sleep 10  # Даем время контейнерам запуститься
-
-      - name: Initialize test database
+          docker ps -a
+      - name: Setting JWT
         run: |
-          docker-compose exec -T php composer install
-          docker-compose exec -T php bin/console doctrine:database:create --if-not-exists --env=test
-          docker-compose exec -T php bin/console doctrine:migrations:migrate -n --env=test || \
-            docker-compose exec -T php bin/console doctrine:schema:update --force --env=test
+          php bin/console lexik:jwt:generate-keypair
+      - name: Setting test environment and DB
+        #        проверяйте название контейнера и БД
+        run: |
+          echo "DATABASE_URL=pgsql://pguser:pguser@postgres:5432/study_on_billing" >> .env.test.local
+          ls -la
+          docker ps -a
+          docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
+          docker-compose exec -T php bin/console doctrine:database:create --env=test
+          docker-compose exec -T php bin/console doctrine:migrations:migrate -n --env=test
           docker-compose exec -T php bin/console doctrine:fixtures:load -n --env=test
-
-      - name: Run tests
+          docker-compose exec -T php bin/phpunit
+      - name: run PHPUnit
         run: docker-compose exec -T php bin/phpunit
-
-      - name: Cleanup
-        if: always()
-        run: docker-compose down
