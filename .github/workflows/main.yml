@@ -43,10 +43,6 @@ jobs:
       - name: Setting JWT
         run: |
           php bin/console lexik:jwt:generate-keypair
-      - name: Prepare Symfony console
-        run: |
-          docker-compose exec php chmod +x bin/console
-          docker-compose exec php ls -la bin/console  # Проверка
       - name: Setting test environment and DB
         #        проверяйте название контейнера и БД
         run: |
