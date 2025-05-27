@@ -49,6 +49,13 @@ jobs:
           docker-compose exec -T --user root php bash -c "chown www-data:www-data /app/bin/console && chmod 755 /app/bin/console"
           # Проверяем
           docker-compose exec -T php ls -la /app/bin/console
+      - name: Fix test permissions
+        run: |
+          # Исправляем права для phpunit
+          docker-compose exec -T --user root php bash -c "chmod +x /app/bin/phpunit && chown www-data:www-data /app/bin/phpunit"
+
+          # Проверяем права
+          docker-compose exec -T php ls -la /app/bin/phpunit
       - name: Setting test environment and DB
         #        проверяйте название контейнера и БД
         run: |
